@@ -403,7 +403,7 @@ def generate_html(symbols):
                         item.rangePercent = ((high - low) / low) * 100;
                     }});
                     filtered.sort((a, b) => b.rangePercent - a.rangePercent);
-                    return filtered.slice(0, 2).map(item => item.symbol);
+                    return filtered.slice(0, 5).map(item => item.symbol);
                 }} catch (e) {{
                     return symbols;
                 }}
