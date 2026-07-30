@@ -5,7 +5,7 @@ from collections import deque
 
 # Konfigurimi
 MAX_RECORDS = 2000
-OI_SPIKE_THRESHOLD = 0.50
+OI_SPIKE_THRESHOLD = 0.05
 
 def format_large_number(num):
     """Formaton numrat në K, M, B"""
@@ -103,7 +103,6 @@ def generate_html(symbols):
             let orderBookData = {{}};
             let levelCounters = {{}};
             let levelMinMax = {{}};
-
             const BUCKETS = {{
                 b1: {{min: 1.01, max: 2.49, label: "1%"}},
                 b2: {{min: 2.50, max: 4.00, label: "2.5%"}},
@@ -175,11 +174,9 @@ def generate_html(symbols):
                     const asks = data.asks || [];
                     const levels = [200, 400, 600, 800, 1000];
                     const result = {{ levels: {{}}, significantAsks: [], significantBids: [] }};
-
                     let bidSum = 0, askSum = 0;
                     let bidTotalValue = 0, askTotalValue = 0;
 
-                    // Llogarit totalin e 1000 niveleve
                     for (let i = 0; i < Math.min(1000, Math.max(bids.length, asks.length)); i++) {{
                         if (i < bids.length) {{
                             const p = parseFloat(bids[i][0]);
@@ -193,16 +190,13 @@ def generate_html(symbols):
                         }}
                     }}
 
-                    // Llogarit cumulative dhe significant levels
                     for (let i = 0; i < Math.min(1000, Math.max(bids.length, asks.length)); i++) {{
                         const bidPrice = i < bids.length ? parseFloat(bids[i][0]) : 0;
                         const bidQty = i < bids.length ? parseFloat(bids[i][1]) : 0;
                         const askPrice = i < asks.length ? parseFloat(asks[i][0]) : 0;
                         const askQty = i < asks.length ? parseFloat(asks[i][1]) : 0;
-
                         const bidValue = bidPrice * bidQty;
                         const askValue = askPrice * askQty;
-
                         bidSum += bidValue;
                         askSum += askValue;
 
@@ -218,7 +212,6 @@ def generate_html(symbols):
                             }};
                         }}
 
-                        // Vetëm nivelet individuale > 1% e totalit
                         if (askTotalValue > 0 && askValue / askTotalValue > 0.01) {{
                             result.significantAsks.push({{
                                 level: i + 1,
@@ -235,10 +228,8 @@ def generate_html(symbols):
                         }}
                     }}
 
-                    // Rendit nga niveli më i vogël tek më i madhi
                     result.significantAsks.sort((a, b) => a.level - b.level);
                     result.significantBids.sort((a, b) => a.level - b.level);
-
                     return result;
                 }} catch(e) {{
                     return {{ levels: {{}}, significantAsks: [], significantBids: [] }};
@@ -255,8 +246,8 @@ def generate_html(symbols):
                 for (let symbol of symbols) {{
                     if (!coinTablesHistory[symbol]) coinTablesHistory[symbol] = [];
                     const ob = orderBookData[symbol] || {{ levels: {{}}, significantAsks: [], significantBids: [] }};
-
                     let rowsHTML = "";
+
                     coinTablesHistory[symbol].forEach(row => {{
                         const color = parseFloat(row.change) >= 0 ? "green" : "red";
                         rowsHTML += `
@@ -291,8 +282,7 @@ def generate_html(symbols):
                     }});
                     obHTML += `</div>`;
 
-                    // Significant Pressure
-                    let pressureHTML = `<div class="pressure"><strong>Significant Pressure (>1% e totalit - nga niveli më i vogël):</strong><br>`;
+                    let pressureHTML = `<div class="pressure"><strong>Significant Pressure (>1% e totalit):</strong><br>`;
                     if (ob.significantAsks && ob.significantAsks.length > 0) {{
                         pressureHTML += `<span style="color:#e74c3c">ASK:</span><br>`;
                         ob.significantAsks.forEach(item => {{
@@ -330,6 +320,7 @@ def generate_html(symbols):
                     `;
                 }}
                 document.getElementById("coins-container").innerHTML = containerHTML;
+
                 document.querySelectorAll(".coin-table-wrapper").forEach(wrapper => {{
                     const symbol = wrapper.dataset.symbol;
                     if (scrollPositions[symbol] !== undefined) {{
@@ -344,6 +335,7 @@ def generate_html(symbols):
                     const currentOI = await fetchOI(symbol);
                     const ob = await fetchOrderBook(symbol);
                     if (currentOI === null) continue;
+
                     orderBookData[symbol] = ob;
                     initLevelData(symbol);
 
@@ -377,41 +369,8 @@ def generate_html(symbols):
                 renderCoinTables();
             }}
 
-            async function refreshTopSymbols() {{
-                const newSymbols = await getTopRangeSymbols();
-                if (newSymbols && newSymbols.length > 0) {{
-                    symbols = newSymbols;
-                    for (let s of symbols) {{
-                        if (!oiHistory[s]) oiHistory[s] = [];
-                        if (!coinTablesHistory[s]) coinTablesHistory[s] = [];
-                        if (!orderBookData[s]) orderBookData[s] = {{ levels: {{}} }};
-                    }}
-                }}
-            }}
-
-            async function getTopRangeSymbols() {{
-                try {{
-                    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
-                    const data = await res.json();
-                    let filtered = data.filter(item =>
-                        item.symbol.endsWith("USDT") && !item.symbol.includes("_") &&
-                        parseFloat(item.highPrice) > 0 && parseFloat(item.lowPrice) > 0
-                    );
-                    filtered.forEach(item => {{
-                        const high = parseFloat(item.highPrice);
-                        const low = parseFloat(item.lowPrice);
-                        item.rangePercent = ((high - low) / low) * 100;
-                    }});
-                    filtered.sort((a, b) => b.rangePercent - a.rangePercent);
-                    return filtered.slice(0, 5).map(item => item.symbol);
-                }} catch (e) {{
-                    return symbols;
-                }}
-            }}
-
-            refreshTopSymbols();
-            setInterval(refreshTopSymbols, 60 * 60 * 1000);
-            setInterval(updateAll, 4000);
+            // Vetëm këto 3 monedha - pa refresh
+            setInterval(updateAll, 5000);
             updateAll();
         </script>
     </body>
@@ -421,18 +380,16 @@ def generate_html(symbols):
 
 def main():
     st.set_page_config(page_title="OI Futures + GB-RY", layout="wide")
-    st.title("🔴 OI Futures Monitor + GB-RY Live + Counters")
-  
-    default = "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT"
-    symbols_input = st.text_input("Monedhat (presje):", value=default)
-    symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
-   
+    st.title("🔴 OI Futures Monitor + GB-RY Live + Counters (BTC-ETH-SOL)")
+
+    # Hardkoduar vetëm këto 3
+    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    
+    st.info("**Monitori është fikur vetëm për:** BTCUSDT, ETHUSDT, SOLUSDT")
+    
     if st.button("NIS MONITORIN LIVE"):
-        if symbols:
-            html_content = generate_html(symbols)
-            st.components.v1.html(html_content, height=1400, scrolling=True)
-        else:
-            st.error("Vendos të paktën një monedhë!")
+        html_content = generate_html(symbols)
+        st.components.v1.html(html_content, height=1600, scrolling=True)
 
 if __name__ == "__main__":
     main()
